@@ -1,0 +1,29 @@
+{
+  "name": "vitalis-patient-search",
+  "main": "worker.js",
+  "compatibility_date": "2026-09-01",
+  "vars": {
+    "FREEBUFF_CLIENT_ID": "cd2b7208-b789-4f5e-95b6-791ab87fff40",
+    "FREEBUFF_ISSUER": "https://freebuff.com/oidc",
+    "APP_ORIGIN": "http://localhost:8787"
+  },
+  "env": {
+    "deploy": {
+      "vars": {
+        "FREEBUFF_ISSUER": "https://freebuff.com/oidc"
+      }
+    }
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "local-db",
+      "database_id": "local"
+    }
+  ],
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": true
+  }
+}

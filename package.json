@@ -8,6 +8,10 @@
     "dev": "npx serve . -l 3000"
   },
   "dependencies": {
+    "@freebuff/auth": "^0.1.0",
     "minisearch": "^7.2.0"
+  },
+  "devDependencies": {
+    "wrangler": "^4.151.1"
   }
 }

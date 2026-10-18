@@ -435,3 +435,124 @@ mark {
 
 /* Focus visibility ---------------------------------------------------------- */
 :focus-visible { outline: 2.5px solid var(--green-500); outline-offset: 2px; }
+
+/* Header actions -------------------------------------------------------------- */
+.head-actions { display: flex; align-items: center; gap: 8px; }
+
+.add-btn {
+  border: none;
+  border-radius: 999px;
+  background: var(--white);
+  color: var(--green-800);
+  font-family: inherit;
+  font-weight: 800;
+  font-size: 0.8rem;
+  padding: 8px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.add-btn:hover { background: var(--green-100); }
+
+.user-chip {
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: rgba(255,255,255,0.14);
+  border: 1px solid rgba(255,255,255,0.25);
+  padding: 6px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.signin-btn {
+  border: 1px solid rgba(255,255,255,0.4);
+  background: transparent;
+  color: var(--white);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.78rem;
+  padding: 7px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.signin-btn:hover { background: rgba(255,255,255,0.12); }
+
+/* Add patient modal ----------------------------------------------------------- */
+.add-modal {
+  position: fixed;
+  z-index: 9;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -46%);
+  width: min(640px, calc(100vw - 24px));
+  max-height: min(88dvh, 720px);
+  display: flex;
+  flex-direction: column;
+  background: var(--white);
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(6, 51, 28, 0.3);
+  opacity: 0;
+  transition: opacity 0.2s, transform 0.2s;
+  overflow: hidden;
+}
+.add-modal.open { opacity: 1; transform: translate(-50%, -50%); }
+
+@media (max-width: 640px) {
+  .add-modal {
+    left: 0;
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-height: 94dvh;
+    transform: translateY(100%);
+    border-radius: 18px 18px 0 0;
+  }
+  .add-modal.open { transform: translateY(0); }
+}
+
+.add-body { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
+.add-grid { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); margin-bottom: 0; }
+
+.f-field { display: flex; flex-direction: column; gap: 4px; }
+.f-field input, .f-field select {
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--ink);
+  outline: none;
+  background: var(--white);
+}
+.f-field input:focus, .f-field select:focus { border-color: var(--green-500); }
+
+.reg-hint {
+  color: var(--ink-soft);
+  font-size: 0.8rem;
+  background: var(--green-50);
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+
+.add-error {
+  color: var(--danger);
+  background: #fdecea;
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.add-success {
+  color: var(--green-800);
+  background: var(--green-100);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-align: center;
+}
+.add-success .reg-big { display: block; font-size: 1.2rem; letter-spacing: 1px; margin-top: 2px; }

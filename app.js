@@ -2,6 +2,10 @@
  * Patient lookup — instant fuzzy search over name, phone and registration number.
  * Powered by MiniSearch (prefix + fuzzy scoring) with a subsequence fallback so
  * every input yields the best possible shortlist.
+ *
+ * Data lives centrally on the server: the patient registry and each doctor's
+ * notes are synced across all clinic devices. A localStorage mirror lets the
+ * app open instantly and work read-only if the network is briefly unavailable.
  */
 (function () {
   "use strict";
@@ -12,6 +16,8 @@
   var RESULTS_LIST = document.getElementById("resultsList");
   var EMPTY_STATE = document.getElementById("emptyState");
   var DB_STATUS = document.getElementById("dbStatus");
+  var USER_CHIP = document.getElementById("userChip");
+  var OPEN_ADD_BTN = document.getElementById("openAddBtn");
 
   var backdrop = document.getElementById("drawerBackdrop");
   var drawer = document.getElementById("drawer");
@@ -22,37 +28,42 @@
   var notesEl = document.getElementById("dNotes");
   var saveStateEl = document.getElementById("saveState");
 
-  var NOTES_KEY = "vitalis_notes_v1";
+  var addModal = document.getElementById("addModal");
+  var addBackdrop = document.getElementById("addBackdrop");
+  var closeAddBtn = document.getElementById("closeAdd");
+  var addForm = document.getElementById("addForm");
+  var addError = document.getElementById("addError");
+  var submitPatientBtn = document.getElementById("submitPatient");
+
+  var CACHE_KEY = "vitalis_cache_v2";
   var MAX_RESULTS = 12;
 
   var patients = [];
+  var doctorNotes = {};   // registration number -> notes (this doctor, from server)
   var mini = null;
   var selectedId = null;
   var activeIndex = -1;
 
   /* ------------------------------------------------------------------ */
-  /* Storage helpers                                                     */
+  /* Local cache (offline mirror)                                         */
   /* ------------------------------------------------------------------ */
 
-  function loadNotes() {
+  function loadCache() {
     try {
-      return JSON.parse(localStorage.getItem(NOTES_KEY) || "{}");
-    } catch (err) {
-      return {};
-    }
+      var raw = JSON.parse(localStorage.getItem(CACHE_KEY) || "null");
+      if (raw && Array.isArray(raw.patients)) return raw;
+    } catch (err) { /* ignore */ }
+    return null;
   }
 
-  function persistNotes(notes) {
+  function persistCache() {
     try {
-      localStorage.setItem(NOTES_KEY, JSON.stringify(notes));
-      return true;
-    } catch (err) {
-      return false;
-    }
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ patients: patients, notes: doctorNotes }));
+    } catch (err) { /* quota — non-fatal */ }
   }
 
-  function notesMap() {
-    return loadNotes();
+  function doctorNoteFor(id) {
+    return doctorNotes[id] || "";
   }
 
   /* ------------------------------------------------------------------ */
@@ -192,12 +203,7 @@
     return results.slice(0, MAX_RESULTS);
   }
 
-  function findPatient(id) {
-    for (var i = 0; i < patients.length; i++) {
-      if (patients[i].id === id) return patients[i];
-    }
-    return null;
-  }
+  /* findPatient is defined in the boot section below (id -> record map). */
 
   /* ------------------------------------------------------------------ */
   /* Rendering                                                           */
@@ -262,7 +268,7 @@
     results.forEach(function (result, index) {
       var p = findPatient(result.id);
       if (!p) return;
-      var notes = notesMap()[p.id];
+      var notes = doctorNoteFor(p.id);
       var li = document.createElement("li");
       li.className = "result-item";
       li.setAttribute("role", "option");
@@ -294,7 +300,7 @@
     var p = findPatient(id);
     if (!p) return;
     selectedId = p.id;
-    var notes = notesMap()[p.id] || p.notes || "";
+    var notes = doctorNoteFor(p.id) || p.notes || "";
 
     document.getElementById("dReg").textContent = p.id;
     document.getElementById("dName").textContent = p.name;
@@ -343,18 +349,25 @@
 
   function saveNotes() {
     if (!selectedId) return;
+    var reg = selectedId;
     var value = notesEl.value.trim();
-    var notes = notesMap();
-    notes[selectedId] = value;
-    var ok = persistNotes(notes);
-    if (ok) {
-      var p = findPatient(selectedId);
-      showSaveState("ok", "Saved");
-      setTimeout(hideSaveState, 1800);
-      refreshCurrentResults();
-    } else {
-      showSaveState("err", "Could not save (storage full?)");
-    }
+    doctorNotes[reg] = value;
+    showSaveState("saving", "Saving…");
+    fetch("/api/notes/" + encodeURIComponent(reg), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ notes: value })
+    })
+      .then(function (res) {
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        persistCache();
+        showSaveState("ok", "Saved — synced to all devices");
+        setTimeout(hideSaveState, 2200);
+        refreshCurrentResults();
+      })
+      .catch(function () {
+        showSaveState("err", "Offline — note saved on this device, will not sync");
+      });
   }
 
   function refreshCurrentResults() {
@@ -429,7 +442,7 @@
   shareDrawerBtn.addEventListener("click", function () {
     if (!selectedId) return;
     var p = findPatient(selectedId);
-    var notes = notesMap()[selectedId];
+    var notes = doctorNoteFor(selectedId);
     var text = "Patient — " + p.name + "\nRegistration no: " + p.id + "\nPhone: " + p.phone + (notes ? "\n\nNotes: " + notes : "");
     if (navigator.share) {
       navigator.share({ title: "Patient file", text: text }).catch(function () {});
@@ -442,36 +455,209 @@
 
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape" && !drawer.hidden) closeDrawer();
+    if (e.key === "Escape" && !addModal.hidden) closeAddModal();
+  });
+
+  /* ------------------------------------------------------------------ */
+  /* Register new patient                                                 */
+  /* ------------------------------------------------------------------ */
+
+  function openAddModal(markError) {
+    addError.hidden = true;
+    addForm.reset();
+    backdrop.hidden = false;
+    addModal.hidden = false;
+    requestAnimationFrame(function () {
+      addModal.classList.add("open");
+      addBackdrop.classList.add("open");
+    });
+    document.body.classList.add("no-scroll");
+    if (markError) {
+      addError.hidden = false;
+      addError.textContent = "Sign in with Freebuff first — then you can register patients.";
+    }
+    setTimeout(function () { document.getElementById("aName").focus(); }, 250);
+  }
+
+  function closeAddModal() {
+    addModal.classList.remove("open");
+    addBackdrop.classList.remove("open");
+    document.body.classList.remove("no-scroll");
+    setTimeout(function () {
+      addModal.hidden = true;
+      addBackdrop.hidden = true;
+    }, 220);
+  }
+
+  var signedInState = false; // set true when /api/me returns a user
+
+  OPEN_ADD_BTN.addEventListener("click", function () {
+    openAddModal(!signedInState);
+  });
+  closeAddBtn.addEventListener("click", closeAddModal);
+  addBackdrop.addEventListener("click", closeAddModal);
+
+  addForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    addError.hidden = true;
+    var name = document.getElementById("aName").value.trim();
+    if (!name) {
+      addError.hidden = false;
+      addError.textContent = "Please enter the patient's name.";
+      return;
+    }
+    var incomingPhone = digitsOnly(document.getElementById("aPhone").value);
+    var existing = search(name).some(function (r) {
+      var p = findPatient(r.id);
+      if (!p) return false;
+      var same = digitsOnly(p.phone);
+      return foldAccents(p.name.toLowerCase()) === foldAccents(name.toLowerCase()) &&
+             (!incomingPhone || !same || same === incomingPhone);
+    });
+    if (existing && !window.confirm("A patient with this name and phone may already exist. Register anyway?")) {
+      return;
+    }
+    var payload = {
+      name: name,
+      phone: document.getElementById("aPhone").value.trim(),
+      age: document.getElementById("aAge").value.trim(),
+      gender: document.getElementById("aGender").value,
+      city: document.getElementById("aCity").value.trim()
+    };
+    submitPatientBtn.disabled = true;
+    submitPatientBtn.textContent = "Registering…";
+    fetch("/api/patients", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+      })
+      .then(function (out) {
+        submitPatientBtn.disabled = false;
+        submitPatientBtn.textContent = "Register patient";
+        if (!out.ok) {
+          addError.hidden = false;
+          addError.textContent = (out.body && out.body.error) || "Could not register.";
+          return;
+        }
+        var reg = out.body.registrationNumber;
+        var newPatient = {
+          id: reg,
+          name: payload.name,
+          phone: payload.phone,
+          age: payload.age ? parseInt(payload.age, 10) : null,
+          gender: payload.gender || null,
+          city: payload.city || null,
+          firstVisit: new Date().toISOString().slice(0, 10),
+          notes: ""
+        };
+        patients.push(newPatient);
+        patientById[reg] = newPatient;
+        buildIndex(patients);
+        persistCache();
+        DB_STATUS.textContent = patients.length + " patient records";
+        addForm.reset();
+        var success = document.createElement("div");
+        success.className = "add-success";
+        success.innerHTML =
+          "Patient registered! Registration number:" +
+          '<span class="reg-big">' + escapeHtml(reg) + "</span>" +
+          '<span style="display:block;font-size:0.78rem;font-weight:500;margin-top:4px">Writes to every clinic device — you can close the form and search for ' +
+          escapeHtml(payload.name) + " now.</span>";
+        addForm.parentNode.insertBefore(success, addForm);
+        addForm.hidden = true;
+        setTimeout(function () {
+          success.remove();
+          addForm.hidden = false;
+          closeAddModal();
+          runSearch(reg);
+        }, 4000);
+        runSearch(reg);
+      })
+      .catch(function () {
+        submitPatientBtn.disabled = false;
+        submitPatientBtn.textContent = "Register patient";
+        addError.hidden = false;
+        addError.textContent = "Network error — check your connection and try again.";
+      });
   });
 
   /* ------------------------------------------------------------------ */
   /* Boot                                                                */
   /* ------------------------------------------------------------------ */
 
-  function migrateNotes(patientList) {
-    // keep only notes whose patient still exists
-    var notes = notesMap();
-    var next = {};
-    patientList.forEach(function (p) {
-      if (notes[p.id] !== undefined) next[p.id] = notes[p.id];
-    });
-    persistNotes(next);
+  function applyData(list, notes) {
+    patients = list;
+    if (notes) doctorNotes = notes;
+    persistCache();
+    patientById = {};
+    patients.forEach(function (p) { patientById[p.id] = p; });
+    buildIndex(patients);
+    DB_STATUS.textContent = patients.length + " patient records";
+    runSearch(SEARCH_INPUT.value);
   }
 
-  fetch("data/patients.json", { cache: "no-store" })
-    .then(function (res) {
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return res.json();
-    })
-    .then(function (data) {
-      patients = data;
-      migrateNotes(patients);
+  var patientById = {};
+  function findPatient(id) {
+    return patientById[id] || null;
+  }
+
+  function boot() {
+    // 1. Paint instantly from the cache mirror if present.
+    var cached = loadCache();
+    if (cached && cached.patients.length) {
+      patients = cached.patients;
+      doctorNotes = cached.notes || {};
+      patientById = {};
+      patients.forEach(function (p) { patientById[p.id] = p; });
       buildIndex(patients);
       DB_STATUS.textContent = patients.length + " patient records";
       runSearch(SEARCH_INPUT.value);
-    })
-    .catch(function (err) {
-      DB_STATUS.textContent = "Could not load patient data";
-      HELPER.textContent = "Error loading patient data: " + err.message;
-    });
+    }
+
+    // 2. Show the signed-in user.
+    fetch("/api/me", { cache: "no-store" })
+      .then(function (r) { return r.ok ? r.json() : { user: null }; })
+      .then(function (data) {
+        if (data.user) {
+          USER_CHIP.hidden = false;
+          USER_CHIP.textContent = data.user.name || data.user.email || "Signed in";
+          signedInState = true;
+        } else {
+          USER_CHIP.hidden = true;
+          signedInState = false;
+        }
+      })
+      .catch(function () {});
+
+    // 3. Sync the central registry + this doctor's notes.
+    Promise.all([
+      fetch("/api/patients", { cache: "no-store" }).then(function (r) {
+        if (r.status === 401) throw new Error("signin");
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      }),
+      fetch("/api/notes", { cache: "no-store" }).then(function (r) {
+        return r.ok ? r.json() : { notes: {} };
+      })
+    ])
+      .then(function (outs) {
+        applyData(outs[0].patients || [], outs[1].notes || {});
+      })
+      .catch(function (err) {
+        if (!cached) {
+          DB_STATUS.textContent = err.message === "signin" ? "Sign in to load records" : "Could not load records";
+          if (err.message === "signin") {
+            HELPER.innerHTML =
+              'This clinic workspace keeps patient data private. <a class="signin-link" href="/auth/freebuff/signin?returnTo=%2F">Sign in with Freebuff</a> to load the registry.';
+          } else {
+            HELPER.textContent = "Error loading patient data: " + err.message;
+          }
+        }
+      });
+  }
+
+  boot();
 })();

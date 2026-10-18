@@ -26,6 +26,26 @@ Or simply open `index.html` directly in a browser.
 
 Patient records live in [`data/patients.json`](data/patients.json). Edit this file to add or update registered patients (id/name/phone/age/gender/city/firstVisit/notes). Doctor-entered extra notes are stored per device in the browser's `localStorage` (key `vitalis_notes_v1`).
 
+## Central sync (multi-device)
+
+The app is also a full-stack Cloudflare Workers + D1 deployment with Sign in with Freebuff: each doctor signs in with their own account, sees the shared patient registry, and their clinical notes sync to every clinic device. Doctor-added notes are private to that doctor's account (stored per account in the `notes` table); the patient registry is shared.
+
+- `worker.js` — Worker API: `/api/patients` (GET/POST), `/api/notes` (GET), `/api/notes/:reg` (GET/PUT), auth-wrapped, D1-backed
+- `schema.sql` — D1 schema (patients + notes tables)
+- `scripts/make-seed.js` — generates `seed.sql` from `data/patients.json`
+- `build.sh` — bundles the worker and mirrors assets to `public/` for deployment
+
+The fully static version (no backend) still works on its own: `app.js` falls back to the bundled `data/patients.json` and localStorage when the API is not present.
+
 ## Deploy
 
-This is a fully static site — GitHub Pages, Netlify, Vercel or any CDN can host it as-is.
+The site is deployed on Freebuff Sites (Cloudflare Workers + D1 + Sign in with Freebuff). To run locally:
+
+```bash
+npm install
+./build.sh
+npx wrangler d1 execute local-db --local --file=seed.sql   # seed local D1
+npx wrangler dev --port 8787                                # http://localhost:8787
+```
+
+Or serve only the static version: `npm start` → http://localhost:3000
