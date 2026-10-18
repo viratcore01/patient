@@ -1,4 +1,4 @@
--- Vitalis Patient Search — central database schema
+-- Vitalis Patient Search — central database schema (single-doctor clinic)
 
 CREATE TABLE IF NOT EXISTS patients (
   id            TEXT PRIMARY KEY,          -- registration number, e.g. HM-2026-0205
@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS patients (
 
 CREATE TABLE IF NOT EXISTS notes (
   registration_number TEXT NOT NULL,
-  owner               TEXT NOT NULL,       -- auth user.sub
+  owner               TEXT NOT NULL,       -- fixed owner marker (single-doctor clinic)
   body                TEXT NOT NULL DEFAULT '',
   updated_at          TEXT NOT NULL DEFAULT (datetime('now')),
   PRIMARY KEY (registration_number, owner)

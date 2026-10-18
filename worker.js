@@ -4,9 +4,8 @@
  *
  * Data model:
  *   - patients table: the clinic's registry (seeded from data/patients.json).
- *     Any signed-in user can read it and add patients.
- *   - notes table: per (registration_number, owner) — notes a given doctor
- *     records on a patient, private to that doctor account.
+ *     The doctor can read it and add patients.
+ *   - notes table: one note entry per patient (single-doctor clinic).
  */
 import { createFreebuffAuth, isSameOriginRequest } from '@freebuff/auth';
 
@@ -141,13 +140,13 @@ export default {
         return Response.json({ error: 'Method not allowed' }, { status: 405 });
       }
 
-      // --- Per-doctor notes ----------------------------------------------
+      // --- Patient notes (single doctor: one note per patient) -----------
       if (url.pathname === '/api/notes' && request.method === 'GET') {
         const user = await auth.getUser(request);
         if (!user) return Response.json({ error: 'Sign in required' }, { status: 401 });
         const { results } = await env.DB.prepare(
-          'SELECT registration_number, body FROM notes WHERE owner = ?'
-        ).bind(user.sub).all();
+          'SELECT registration_number, body FROM notes'
+        ).all();
         const notes = {};
         for (const r of results) notes[r.registration_number] = r.body;
         return Response.json({ notes }, { headers: { 'Cache-Control': 'private, no-store' } });
@@ -159,8 +158,8 @@ export default {
         if (!user) return Response.json({ error: 'Sign in required' }, { status: 401 });
         const reg = decodeURIComponent(m[1]);
         const row = await env.DB.prepare(
-          'SELECT body FROM notes WHERE registration_number = ? AND owner = ?'
-        ).bind(reg, user.sub).first();
+          'SELECT body FROM notes WHERE registration_number = ?'
+        ).bind(reg).first();
         return Response.json({ notes: row ? row.body : '' }, { headers: { 'Cache-Control': 'private, no-store' } });
       }
 
@@ -180,9 +179,9 @@ export default {
         if (!exists) return Response.json({ error: 'Unknown patient' }, { status: 404 });
 
         await env.DB.prepare(
-          'INSERT INTO notes (registration_number, owner, body, updated_at) VALUES (?, ?, ?, datetime(\'now\')) ' +
+          "INSERT INTO notes (registration_number, owner, body, updated_at) VALUES (?, ?, ?, datetime('now')) " +
           "ON CONFLICT (registration_number, owner) DO UPDATE SET body = excluded.body, updated_at = datetime('now')"
-        ).bind(reg, user.sub, String(body.notes ?? '').slice(0, 20000)).run();
+        ).bind(reg, '_clinic_', String(body.notes ?? '').slice(0, 20000)).run();
 
         return Response.json({ ok: true }, { headers: { 'Cache-Control': 'private, no-store' } });
       }

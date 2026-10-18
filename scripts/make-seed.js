@@ -13,7 +13,7 @@ patients.forEach((p) => {
   );
   if (p.notes) {
     stmts.push(
-      `INSERT OR IGNORE INTO notes (registration_number, owner, body) VALUES (${esc(p.id)}, '_seed_owner_', ${esc(p.notes)})`
+      `INSERT OR IGNORE INTO notes (registration_number, owner, body) VALUES (${esc(p.id)}, '_clinic_', ${esc(p.notes)})`
     );
   }
 });
