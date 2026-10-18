@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Vitalis Homeopathy — Patient Search</title>
+  <meta name="description" content="Instant patient lookup for homeopathic clinics: search by name, phone number or registration number." />
+  <meta name="theme-color" content="#0e6b3a" />
+  <link rel="icon" type="image/svg+xml" href="icon.svg" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M12 3v18M3 12h18" />
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>Vitalis Homeopathy</h1>
+        <p>Patient records &amp; lookup</p>
+      </div>
+    </div>
+    <div class="status" id="dbStatus" title="Number of patient records loaded">— records</div>
+  </header>
+
+  <main class="container">
+    <section class="search-section" id="searchSection">
+      <label class="search-wrap" for="searchInput">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
+        </svg>
+        <input id="searchInput" type="search" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+               placeholder="Search by name, phone number or registration no…" aria-label="Search patients" />
+        <button id="clearBtn" class="clear-btn" type="button" aria-label="Clear search" hidden>&times;</button>
+      </label>
+
+      <p class="helper" id="helperText">Start typing to shortlist patients — smart fuzzy matching handles typos and partial input.</p>
+    </section>
+
+    <section class="results" id="results">
+      <ul class="results-list" id="resultsList" role="listbox" aria-label="Matching patients"></ul>
+      <p class="empty-state" id="emptyState" hidden>No patients found. Try fewer letters or the phone number.</p>
+    </section>
+  </main>
+
+  <!-- Patient detail drawer -->
+  <div class="drawer-backdrop" id="drawerBackdrop" hidden></div>
+  <aside class="drawer" id="drawer" hidden aria-label="Patient details" role="dialog" aria-modal="true">
+    <header class="drawer-head">
+      <button class="icon-btn" id="closeDrawer" type="button" aria-label="Back to search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+      </button>
+      <h2>Patient file</h2>
+      <button class="icon-btn" id="shareDrawer" type="button" aria-label="Share patient file">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.9l7.6-4.3M8.2 13.1l7.6 4.3"/></svg>
+      </button>
+    </header>
+
+    <div class="drawer-body" id="drawerBody">
+      <div class="reg-card">
+        <span class="reg-label">Registration number</span>
+        <span class="reg-value" id="dReg">—</span>
+      </div>
+
+      <div class="grid">
+        <div class="field"><span class="f-label">Name</span><span class="f-value" id="dName">—</span></div>
+        <div class="field"><a class="f-value tel" id="dPhone" href="#">—</a></div>
+        <div class="field"><span class="f-label">Age</span><span class="f-value" id="dAge">—</span></div>
+        <div class="field"><span class="f-label">Gender</span><span class="f-value" id="dGender">—</span></div>
+        <div class="field"><span class="f-label">City</span><span class="f-value" id="dCity">—</span></div>
+        <div class="field"><span class="f-label">First visit</span><span class="f-value" id="dVisit">—</span></div>
+      </div>
+
+      <div class="notes-block">
+        <div class="notes-head">
+          <span class="f-label">Clinical notes &amp; extra information</span>
+          <span class="save-state" id="saveState" hidden></span>
+        </div>
+        <p class="notes-hint">Anything the doctor wants recorded for this patient — history, remedies, follow-ups.</p>
+        <textarea id="dNotes" rows="6" placeholder="e.g. remedy plan, follow-up date, referral details…"></textarea>
+        <button class="save-btn" id="saveNotes" type="button">Save notes</button>
+      </div>
+    </div>
+  </aside>
+
+  <script src="vendor/minisearch.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

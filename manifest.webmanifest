@@ -1,0 +1,13 @@
+{
+  "name": "Vitalis Homeopathy — Patient Search",
+  "short_name": "Patient Search",
+  "description": "Instant patient lookup for homeopathic clinics: search by name, phone number or registration number.",
+  "lang": "en",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0e6b3a",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "purpose": "any" }
+  ]
+}

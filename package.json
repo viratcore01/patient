@@ -1,0 +1,13 @@
+{
+  "name": "patient-app",
+  "version": "1.0.0",
+  "description": "Patient lookup app for a homeopathic clinic: instant fuzzy search by name or phone, registration numbers, and editable patient notes.",
+  "private": true,
+  "scripts": {
+    "start": "npx serve . -l 3000",
+    "dev": "npx serve . -l 3000"
+  },
+  "dependencies": {
+    "minisearch": "^7.2.0"
+  }
+}
