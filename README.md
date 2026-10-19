@@ -45,6 +45,12 @@ The app in daily use runs on an Oracle Cloud free-tier VM as a plain Node.js ser
 - **`server.js`** — same API shape as the Worker: `/api/health`, `/api/patients` (GET/POST), `/api/notes` (GET), `/api/notes/:reg` (GET/PUT). Serves `public/` statically; database in SQLite at `data/patients.db`; writes require the `x-vitalis-client: app` header (a light CSRF gate for the single-user, no-login setup). Seeds the 30 starter records automatically on first run.
 - Runs as the `vitalis.service` systemd unit on port 3005 (auto-starts on boot); Caddy reverse-proxies the HTTPS subdomain to it. The clinic's other site on the same VM is untouched.
 
+### Static mirror (Vercel)
+
+A static-only mirror lives at https://patient-beta-lake.vercel.app. On hosts without a backend, the frontend automatically falls back to the central Oracle VM API (configured in `config.js` → `window.VITALIS_API_BASE`), so search, registration and notes behave identically there — same central SQLite data. The VM allows these cross-origin API calls only for origins on its allow-list (`VITALIS_ALLOWED_ORIGINS`, default: the Vercel domain + localhost dev ports).
+
+Redeploy the mirror after changes: `vercel --prod` from this directory (or dashboard redeploy).
+
 Redeploy updates:
 
 ```bash

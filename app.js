@@ -38,6 +38,30 @@
   var CACHE_KEY = "vitalis_cache_v2";
   var MAX_RESULTS = 12;
 
+  /* ------------------------------------------------------------------ */
+  /* Backend location — same-origin probe, with central-API fallback       */
+  /* On the Oracle VM the same-origin backend answers and API_BASE is "";  */
+  /* on static-only mirrors (e.g. Vercel) config.js supplies the central   */
+  /* clinic server URL, so the same UI works from any host.                */
+  /* ------------------------------------------------------------------ */
+
+  var API_BASE = "";
+  function api(path) { return API_BASE + path; }
+
+  var API_BASE_READY = (function () {
+    function pickAlt() {
+      var alt = String(window.VITALIS_API_BASE || "").trim().replace(/\/+$/, "");
+      if (!alt) { return ""; }
+      return fetch(alt + "/api/health", { cache: "no-store" })
+        .then(function (r) { return r.ok ? alt : ""; })
+        .catch(function () { return ""; });
+    }
+    return fetch("/api/health", { cache: "no-store" })
+      .catch(function () { return null; })
+      .then(function (r) { return r && r.ok ? "" : pickAlt(); })
+      .then(function (base) { API_BASE = base; });
+  })();
+
   var patients = [];
   var doctorNotes = {};   // registration number -> notes (this doctor, from server)
   var mini = null;
@@ -353,7 +377,7 @@
     var value = notesEl.value.trim();
     doctorNotes[reg] = value;
     showSaveState("saving", "Saving…");
-    fetch("/api/notes/" + encodeURIComponent(reg), {
+    fetch(api("/api/notes/") + encodeURIComponent(reg), {
       method: "PUT",
       headers: { "Content-Type": "application/json", "x-vitalis-client": "app" },
       body: JSON.stringify({ notes: value })
@@ -526,7 +550,7 @@
     };
     submitPatientBtn.disabled = true;
     submitPatientBtn.textContent = "Registering…";
-    fetch("/api/patients", {
+    fetch(api("/api/patients"), {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-vitalis-client": "app" },
       body: JSON.stringify(payload)
@@ -617,44 +641,43 @@
       runSearch(SEARCH_INPUT.value);
     }
 
-    // 2. Show the signed-in user.
-    fetch("/api/me", { cache: "no-store" })
-      .then(function (r) { return r.ok ? r.json() : { user: null }; })
-      .then(function (data) {
-        if (data.user) {
-          USER_CHIP.hidden = false;
-          USER_CHIP.textContent = data.user.name || data.user.email || "Signed in";
-          signedInState = true;
-        } else {
-          USER_CHIP.hidden = true;
-          signedInState = false;
-        }
-      })
-      .catch(function () {});
+    // 2. Confirm the session + 3. sync the central registry and notes.
+    API_BASE_READY
+      .then(function () {
+        fetch(api("/api/me"), { cache: "no-store" })
+          .then(function (r) { return r.ok ? r.json() : { user: null }; })
+          .then(function (data) {
+            if (data.user) {
+              USER_CHIP.hidden = false;
+              USER_CHIP.textContent = data.user.name || data.user.email || "Signed in";
+              signedInState = true;
+            } else {
+              USER_CHIP.hidden = true;
+              signedInState = false;
+            }
+          })
+          .catch(function () {});
 
-    // 3. Sync the central registry + this doctor's notes.
-    Promise.all([
-      fetch("/api/patients", { cache: "no-store" }).then(function (r) {
-        if (r.status === 401) throw new Error("signin");
-        if (!r.ok) throw new Error("HTTP " + r.status);
-        return r.json();
-      }),
-      fetch("/api/notes", { cache: "no-store" }).then(function (r) {
-        return r.ok ? r.json() : { notes: {} };
+        return Promise.all([
+          fetch(api("/api/patients"), { cache: "no-store" }).then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+          }),
+          fetch(api("/api/notes"), { cache: "no-store" }).then(function (r) {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+          })
+        ]);
       })
-    ])
       .then(function (outs) {
         applyData(outs[0].patients || [], outs[1].notes || {});
       })
       .catch(function (err) {
         if (!cached) {
-          DB_STATUS.textContent = err.message === "signin" ? "Sign in to load records" : "Could not load records";
-          if (err.message === "signin") {
-            HELPER.innerHTML =
-              'This clinic workspace keeps patient data private. <a class="signin-link" href="/auth/freebuff/signin?returnTo=%2F">Sign in with Freebuff</a> to load the registry.';
-          } else {
-            HELPER.textContent = "Error loading patient data: " + err.message;
-          }
+          DB_STATUS.textContent = "Could not load records";
+          HELPER.textContent = "Error loading patient data: " + (err && err.message === "no-backend"
+            ? "no backend available"
+            : (err && err.message) || "network error");
         }
       });
   }

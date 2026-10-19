@@ -6,7 +6,7 @@ cd "$(dirname "$0")"
 npx esbuild worker.js --bundle --format=esm --outfile=dist-worker/worker.js
 mkdir -p public/vendor public/data
 cp dist-worker/worker.js worker.bundle.js
-cp index.html app.js styles.css icon.svg manifest.webmanifest public/
+cp index.html app.js styles.css icon.svg manifest.webmanifest config.js public/
 cp vendor/minisearch.min.js public/vendor/
 cp data/patients.json public/data/
 

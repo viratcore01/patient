@@ -58,6 +58,27 @@ function digitsOnly(s) {
   return String(s || '').replace(/\D+/g, '');
 }
 
+/*
+ * CORS allow-list: static mirrors of the UI (e.g. the Vercel deployment) may
+ * call this central backend. Same-origin requests never send an Origin header
+ * for these endpoints, so unaffected requests are unchanged.
+ */
+const ALLOWED_ORIGINS = (process.env.VITALIS_ALLOWED_ORIGINS ||
+  'https://patient-beta-lake.vercel.app,http://localhost:3005,http://localhost:8787,http://localhost:3000')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function corsFor(req, res) {
+  const origin = req.headers.origin;
+  if (!origin || !ALLOWED_ORIGINS.includes(origin)) return;
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-vitalis-client');
+  res.setHeader('Access-Control-Max-Age', '86400');
+}
+
 function readBody(req, limit) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -132,8 +153,16 @@ const server = http.createServer(async (req, res) => {
   const p = url.pathname;
 
   try {
+    /* CORS preflight */
+    if (req.method === 'OPTIONS' && p.startsWith('/api/')) {
+      corsFor(req, res);
+      res.writeHead(204, { 'Cache-Control': 'no-store' });
+      return res.end();
+    }
+
     /* ---------------- API ---------------- */
     if (p === '/api/health') {
+      corsFor(req, res);
       return sendJSON(res, 200, { ok: true });
     }
 
@@ -141,6 +170,7 @@ const server = http.createServer(async (req, res) => {
       if (!seeded) { seedIfEmpty(); seeded = true; }
 
       if (req.method === 'GET') {
+        corsFor(req, res);
         const rows = db.prepare('SELECT * FROM patients ORDER BY id').all();
         return sendJSON(res, 200, {
           patients: rows.map((r) => ({
@@ -152,6 +182,7 @@ const server = http.createServer(async (req, res) => {
       }
 
       if (req.method === 'POST') {
+        corsFor(req, res);
         if (req.headers['x-vitalis-client'] !== 'app') return httpError(res, 403, 'Forbidden');
         let body;
         try { body = JSON.parse(await readBody(req, 20000)); } catch { return httpError(res, 400, 'Invalid JSON'); }
@@ -187,6 +218,7 @@ const server = http.createServer(async (req, res) => {
 
     let m;
     if ((m = p.match(/^\/api\/notes$/)) && req.method === 'GET') {
+      corsFor(req, res);
       const rows = db.prepare('SELECT registration_number, body FROM notes').all();
       const notes = {};
       for (const r of rows) notes[r.registration_number] = r.body;
@@ -199,11 +231,13 @@ const server = http.createServer(async (req, res) => {
       if (!exists) return httpError(res, 404, 'Unknown patient');
 
       if (req.method === 'GET') {
+        corsFor(req, res);
         const row = db.prepare('SELECT body FROM notes WHERE registration_number = ?').get(reg);
         return sendJSON(res, 200, { notes: row ? row.body : '' });
       }
 
       if (req.method === 'PUT') {
+        corsFor(req, res);
         if (req.headers['x-vitalis-client'] !== 'app') return httpError(res, 403, 'Forbidden');
         let body;
         try { body = JSON.parse(await readBody(req, 25000)); } catch { return httpError(res, 400, 'Invalid JSON'); }
