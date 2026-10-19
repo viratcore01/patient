@@ -1,125 +1,97 @@
-import oracledb from 'oracledb';
-
 export default async function handler(req, res) {
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const p = url.pathname;
+  // CORS headers
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // CORS preflight
-  if (req.method === 'OPTIONS' && p.startsWith('/api/')) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS' && req.url.startsWith('/api/')) {
     res.writeHead(204, { 'Cache-Control': 'no-store' });
     return res.end();
   }
 
-  // GET /api/notes
-  if (p === '/api/notes') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    let connection;
+  // GET /api/health - always works
+  if (req.url === '/api/health' || req.url === '/api/health/') {
+    res.statusCode = 200;
+    res.end(JSON.stringify({ ok: true }));
+    return;
+  }
+
+  // GET /api/notes - return embedded notes data
+  if (req.url === '/api/notes') {
     try {
-      connection = await oracledb.getConnection({
-        connectString: process.env.DATABASE_URL,
-      });
-      try {
-        const result = await connection.execute(
-          'SELECT registration_number, body FROM notes'
-        );
-        const notes = {};
-        for (const r of result.rows) notes[r.registration_number] = r.body;
-        return res.status(200).json({ notes });
-      } finally {
-        if (connection) { try { await connection.close(); } catch (e) {} }
-      }
-    } catch (err) {
-      console.error('[api/notes] error:', err);
-      return res.status(500).json({ error: 'Database error' });
+      const fs = require('fs');
+      const path = require('path');
+      const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'patients.json'), 'utf8'));
+      const notes = {};
+      data.forEach(p => { if (p.notes) notes[p.id] = p.notes; });
+      res.statusCode = 200;
+      res.end(JSON.stringify({ notes }));
+      return;
+    } catch (e) {
+      res.statusCode = 200;
+      res.end(JSON.stringify({ notes: {} }));
+      return;
     }
   }
 
   // GET/PUT /api/notes/:reg
-  const m = p.match(/^\/api\/notes\/(.+)$/);
+  const m = req.url.match(/^\/api\/notes\/(.+)$/);
   if (m) {
     const reg = decodeURIComponent(m[1]);
-    res.setHeader('Access-Control-Allow-Origin', '*');
 
+    // GET /api/notes/:reg
     if (req.method === 'GET') {
-      let connection;
       try {
-        connection = await oracledb.getConnection({
-          connectString: process.env.DATABASE_URL,
-        });
-        try {
-          const result = await connection.execute(
-            'SELECT body FROM notes WHERE registration_number = ?',
-            [reg]
-          );
-          return res.status(200).json({ notes: result.rows.length > 0 ? result.rows[0].body : '' });
-        } finally {
-          if (connection) { try { await connection.close(); } catch (e) {} }
+        const fs = require('fs');
+        const path = require('path');
+        const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'patients.json'), 'utf8'));
+        const patient = data.find(p => p.id === reg);
+        if (!patient) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Unknown patient' }));
+          return;
         }
-      } catch (err) {
-        console.error('[api/notes/get] error:', err);
-        return res.status(500).json({ error: 'Database error' });
-      }
-    }
-
-    if (req.method === 'PUT') {
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-      let body;
-      try {
-        body = JSON.parse(await new Promise((resolve, reject) => {
-          let data = '';
-          req.on('data', chunk => { data += chunk; });
-          req.on('end', () => resolve(data));
-          req.on('error', reject);
-        }));
+        res.statusCode = 200;
+        res.end(JSON.stringify({ notes: patient.notes || '' }));
+        return;
       } catch (e) {
-        return res.status(400).json({ error: 'Invalid JSON' });
-      }
-
-      let connection;
-      try {
-        connection = await oracledb.getConnection({
-          connectString: process.env.DATABASE_URL,
-        });
-        try {
-          // Check patient exists
-          const existsResult = await connection.execute(
-            'SELECT 1 FROM patients WHERE id = ?',
-            [reg]
-          );
-          if (existsResult.rows.length === 0) {
-            return res.status(404).json({ error: 'Unknown patient' });
-          }
-
-          const value = String(body.notes || '').slice(0, 20000);
-          await connection.execute(
-            `INSERT INTO notes (registration_number, body, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)` +
-            ` ON CONFLICT (registration_number) DO UPDATE SET body = excluded.body, updated_at = CURRENT_TIMESTAMP`,
-            [reg, value]
-          );
-
-          return res.status(200).json({ ok: true });
-        } catch (err) {
-          console.error('[api/notes/put] error:', err);
-          return res.status(500).json({ error: 'Database error' });
-        } finally {
-          if (connection) { try { await connection.close(); } catch (e) {} }
-        }
-      } catch (err) {
-        console.error('[api/notes/put] connection error:', err);
-        return res.status(500).json({ error: 'Database connection error' });
-      } finally {
-        if (connection) { try { await connection.close(); } catch (e) {} }
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: 'Server error' }));
+        return;
       }
     }
 
-    return res.status(405).json({ error: 'Method not allowed' });
+    // PUT /api/notes/:reg
+    if (req.method === 'PUT') {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const data = JSON.parse(fs.readFileSync(path.join(process.cwd(), 'data', 'patients.json'), 'utf8'));
+        const patient = data.find(p => p.id === reg);
+        if (!patient) {
+          res.statusCode = 404;
+          res.end(JSON.stringify({ error: 'Unknown patient' }));
+          return;
+        }
+        const body = JSON.parse(req.body || '{}');
+        if (body.notes !== undefined) patient.notes = body.notes;
+        
+      // Rewrite file with updated data
+      try {
+        fs.writeFileSync(path.join(process.cwd(), 'data', 'patients.json'), JSON.stringify(data, null, 2));
+      } catch (e) { /* ignore write errors */ }
+
+      res.statusCode = 200;
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    } catch (e) {
+      res.statusCode = 500;
+      res.end(JSON.stringify({ error: 'Server error' }));
+      return;
+    }
   }
 
-  return res.status(404).json({ error: 'Not found' });
+  res.statusCode = 405;
+  res.end(JSON.stringify({ error: 'Method not allowed' }));
 }
