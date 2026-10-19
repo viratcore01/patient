@@ -210,6 +210,12 @@ const server = http.createServer(async (req, res) => {
             String(body.city || '').trim() || null,
             String(body.firstVisit || '').trim() || new Date().toISOString().slice(0, 10));
 
+        const notesValue = String(body.notes || '').slice(0, 20000);
+        db.prepare(
+          `INSERT INTO notes (registration_number, body, updated_at) VALUES (?, ?, datetime('now'))
+           ON CONFLICT (registration_number) DO UPDATE SET body = excluded.body, updated_at = datetime('now')`
+        ).run(reg, notesValue);
+
         return sendJSON(res, 201, { ok: true, registrationNumber: reg });
       }
 

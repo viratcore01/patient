@@ -687,7 +687,8 @@
       phone: document.getElementById("aPhone").value.trim(),
       age: document.getElementById("aAge").value.trim(),
       gender: document.getElementById("aGender").value,
-      city: document.getElementById("aCity").value.trim()
+      city: document.getElementById("aCity").value.trim(),
+      notes: document.getElementById("aNotes").value.trim()
     };
     submitPatientBtn.disabled = true;
     submitPatientBtn.textContent = "Registering…";
