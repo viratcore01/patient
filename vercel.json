@@ -1,4 +1,9 @@
 {
+  "rewrites": [
+    { "source": "/api/health", "destination": "/api/health" },
+    { "source": "/api/patients", "destination": "/api/patients" },
+    { "source": "/api/notes", "destination": "/api/notes" }
+  ],
   "headers": [
     {
       "source": "/api/(.*)",
