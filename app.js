@@ -486,7 +486,7 @@
   /* Register new patient                                                 */
   /* ------------------------------------------------------------------ */
 
-  function openAddModal(markError) {
+  function openAddModal() {
     addError.hidden = true;
     addForm.reset();
     backdrop.hidden = false;
@@ -496,10 +496,6 @@
       addBackdrop.classList.add("open");
     });
     document.body.classList.add("no-scroll");
-    if (markError) {
-      addError.hidden = false;
-      addError.textContent = "Sign in with Freebuff first — then you can register patients.";
-    }
     setTimeout(function () { document.getElementById("aName").focus(); }, 250);
   }
 
@@ -513,10 +509,8 @@
     }, 220);
   }
 
-  var signedInState = false; // set true when /api/me returns a user
-
   OPEN_ADD_BTN.addEventListener("click", function () {
-    openAddModal(!signedInState);
+    openAddModal();
   });
   closeAddBtn.addEventListener("click", closeAddModal);
   addBackdrop.addEventListener("click", closeAddModal);
@@ -650,10 +644,8 @@
             if (data.user) {
               USER_CHIP.hidden = false;
               USER_CHIP.textContent = data.user.name || data.user.email || "Signed in";
-              signedInState = true;
             } else {
               USER_CHIP.hidden = true;
-              signedInState = false;
             }
           })
           .catch(function () {});
