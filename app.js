@@ -863,52 +863,6 @@ function boot() {
       HELPER.textContent = "Starting search - no patient data available";
     });
 
-    // 2. Attempt API sync in background - update data if backend becomes available
-    API_BASE_READY
-      .then(function () {
-        fetch(api("/api/me"), { cache: "no-store" })
-          .then(function (r) { return r.ok ? r.json() : { user: null }; })
-          .then(function (data) {
-            if (data.user) {
-              USER_CHIP.hidden = false;
-              USER_CHIP.textContent = data.user.name || data.user.email || "Signed in";
-              // Set registration prefix from user profile if available
-              if (data.user.registrationPrefix) {
-                window.USER_REGISTRATION_PREFIX = data.user.registrationPrefix;
-              }
-              // Add click handler to open patient details
-              USER_CHIP.onclick = function () {
-                if (patients.length > 0) {
-                  openDrawer(patients[0].id);
-                }
-              };
-            } else {
-              USER_CHIP.hidden = true;
-            }
-          })
-          .catch(function () {});
-
-        return Promise.all([
-          fetch(api("/api/patients"), { cache: "no-store" }).then(function (r) {
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            return r.json();
-          }),
-          fetch(api("/api/notes"), { cache: "no-store" }).then(function (r) {
-            if (!r.ok) throw new Error("HTTP " + r.status);
-            return r.json();
-          })
-        ]);
-      })
-      .then(function (outs) {
-        // If API returned patients and we have fewer, update from API
-        if (outs[0].patients && outs[0].patients.length > patients.length) {
-          applyData(outs[0].patients, outs[1].notes || {});
-        }
-      })
-      .catch(function (err) {
-        // API sync failed silently - embedded data already loaded
-        console.log("API sync failed, using embedded data:", err.message);
-      });
   }
 
   boot();
