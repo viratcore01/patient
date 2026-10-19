@@ -851,7 +851,17 @@ function boot() {
       runSearch(SEARCH_INPUT.value);
     }
 
-    // 2. Confirm the session + 3. sync the central registry and notes.
+    // 2. Try to load from embedded patients.json as fallback first,
+    //    then attempt API sync if desired.
+    loadEmbeddedPatients().then(function (embedded) {
+      applyData(embedded.patients, embedded.notes);
+    }).catch(function () {
+      // If embedded data also fails, show error message
+      DB_STATUS.textContent = "Could not load records";
+      HELPER.textContent = "Error loading patient data: no backend available";
+    });
+
+    // 3. Attempt API sync in background (non-blocking)
     API_BASE_READY
       .then(function () {
         fetch(api("/api/me"), { cache: "no-store" })
@@ -878,18 +888,14 @@ function boot() {
         ]);
       })
       .then(function (outs) {
-        applyData(outs[0].patients || [], outs[1].notes || {});
+        // API sync succeeded - update data if different from embedded
+        if (outs[0].patients && outs[0].patients.length > 0) {
+          applyData(outs[0].patients, outs[1].notes || {});
+        }
       })
       .catch(function (err) {
-        if (!cached) {
-          // Fallback: try loading embedded patients.json from the same origin
-          loadEmbeddedPatients().then(function (embedded) {
-            applyData(embedded.patients, embedded.notes);
-          }).catch(function () {
-            DB_STATUS.textContent = "Could not load records";
-            HELPER.textContent = "Error loading patient data: no backend available";
-          });
-        }
+        // API sync failed silently - embedded data already loaded
+        console.log("API sync failed, using embedded data:", err.message);
       });
   }
 
