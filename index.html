@@ -37,7 +37,7 @@
 
   <main class="container">
     <section class="search-section" id="searchSection">
-      <label class="search-wrap" for="searchInput">
+      <label class="search-wrap" for="searchInput" onclick="document.getElementById('searchInput').focus()">
         <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
           <circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path>
         </svg>
@@ -65,6 +65,9 @@
       <h2>Patient file</h2>
       <button class="icon-btn" id="editPatient" type="button" aria-label="Edit patient details" hidden>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>
+      </button>
+      <button class="icon-btn" id="deletePatient" type="button" aria-label="Delete patient" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18\nM19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6\nM5 9h14\n"/></svg>
       </button>
       <button class="icon-btn" id="shareDrawer" type="button" aria-label="Share patient file">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.9l7.6-4.3M8.2 13.1l7.6 4.3"/></svg>
@@ -147,6 +150,8 @@
         <div class="f-field"><label class="f-label" for="aCity">City</label>
           <input id="aCity" autocomplete="off" maxlength="60" /></div>
       </div>
+      <div class="f-field"><label class="f-label" for="aRegNum">Registration number</label>
+        <input id="aRegNum" autocomplete="off" maxlength="20" placeholder="e.g. HM-2026-0100" /></div>
       <div class="f-field reg-hint">Registration number will be generated automatically and shown after saving.</div><div class="f-field"><label class="f-label" for="aNotes">Clinical notes & extra information</label><textarea id="aNotes" rows="3" placeholder="e.g. remedy plan, follow-up date, referral details…" autocomplete="off"></textarea></div>
       <div class="add-error" id="addError" hidden></div>
       <button class="save-btn" id="submitPatient" type="submit">Register patient</button>

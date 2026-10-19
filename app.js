@@ -11,6 +11,7 @@
   "use strict";
 
   var SEARCH_INPUT = document.getElementById("searchInput");
+  SEARCH_INPUT.onfocus = function() { this.style.outline = "none"; };
   var CLEAR_BTN = document.getElementById("clearBtn");
   var HELPER = document.getElementById("helperText");
   var RESULTS_LIST = document.getElementById("resultsList");
