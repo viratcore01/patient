@@ -562,6 +562,20 @@ mark {
 .edit-form .f-field input[type="date"] {
   font-variant-numeric: tabular-nums;
 }
+.edit-notes-field { margin-top: 2px; }
+#eNotes {
+  width: 100%;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  font-size: 0.92rem;
+  color: var(--ink);
+  resize: vertical;
+  min-height: 110px;
+  outline: none;
+}
+#eNotes:focus { border-color: var(--green-500); }
 .edit-actions { display: flex; gap: 10px; align-items: center; }
 .edit-actions .save-btn { margin-top: 0; }
 .cancel-btn {

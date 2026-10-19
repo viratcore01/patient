@@ -102,13 +102,18 @@
             <input id="eVisit" type="date" autocomplete="off" /></div>
         </div>
         <div class="add-error" id="editError" hidden></div>
+        <div class="f-field edit-notes-field">
+          <label class="f-label" for="eNotes">Clinical notes &amp; extra information</label>
+          <textarea id="eNotes" rows="6" placeholder="e.g. remedy plan, follow-up date, referral details…"></textarea>
+        </div>
+        <div class="add-error" id="editError" hidden></div>
         <div class="edit-actions">
           <button class="save-btn" id="saveEdit" type="submit">Save changes</button>
           <button class="cancel-btn" id="cancelEdit" type="button">Cancel</button>
         </div>
       </form>
 
-      <div class="notes-block">
+      <div class="notes-block" id="notesBlock">
         <div class="notes-head">
           <span class="f-label">Clinical notes &amp; extra information</span>
           <span class="save-state" id="saveState" hidden></span>

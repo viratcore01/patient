@@ -29,6 +29,7 @@
   var saveStateEl = document.getElementById("saveState");
 
   var editPatientBtn = document.getElementById("editPatient");
+  var notesBlock = document.getElementById("notesBlock");
   var dGrid = document.getElementById("dGrid");
   var editForm = document.getElementById("editForm");
   var editError = document.getElementById("editError");
@@ -342,9 +343,11 @@
 
   function setEditView(editing) {
     dGrid.hidden = editing;
+    notesBlock.hidden = editing;
     editForm.hidden = !editing;
     editPatientBtn.hidden = editing;
     if (!editing) editError.hidden = true;
+    hideSaveState();
   }
 
   function openDrawer(id) {
@@ -380,6 +383,7 @@
     document.getElementById("eGender").value = p.gender || "";
     document.getElementById("eCity").value = p.city || "";
     document.getElementById("eVisit").value = p.firstVisit || "";
+    document.getElementById("eNotes").value = notesEl.value;
     editError.hidden = true;
     setEditView(true);
     setTimeout(function () { document.getElementById("eName").focus(); }, 200);
@@ -447,10 +451,39 @@
           runSearch(SEARCH_INPUT.value);
           persistCache();
         }
-        setEditView(false);
-        if (p) renderPatientFields(p);
-        showSaveState("ok", "Details updated — synced to all devices");
-        setTimeout(hideSaveState, 2400);
+        // Notes: save through the standard notes endpoint too.
+        var notesVal = document.getElementById("eNotes").value.trim();
+        return fetch(api("/api/notes/") + encodeURIComponent(selectedId), {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "x-vitalis-client": "app" },
+          body: JSON.stringify({ notes: notesVal })
+        })
+          .then(function (nr) {
+            if (!nr.ok) {
+              saveEditBtn.disabled = false;
+              saveEditBtn.textContent = "Save changes";
+              editError.hidden = false;
+              editError.textContent = "Details were saved, but the notes could not be synced — try again.";
+              return;
+            }
+            doctorNotes[selectedId] = notesVal;
+            if (p) {
+              buildIndex(patients);
+              runSearch(SEARCH_INPUT.value);
+              persistCache();
+            }
+            setEditView(false);
+            if (p) renderPatientFields(p);
+            notesEl.value = notesVal;
+            showSaveState("ok", "Saved — synced to all devices");
+            setTimeout(hideSaveState, 2400);
+          })
+          .catch(function () {
+            saveEditBtn.disabled = false;
+            saveEditBtn.textContent = "Save changes";
+            editError.hidden = false;
+            editError.textContent = "Details were saved, but the notes could not be synced — try again.";
+          });
       })
       .catch(function () {
         saveEditBtn.disabled = false;
