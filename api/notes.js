@@ -1,9 +1,4 @@
-import { Pool } from 'pg';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  idleTimeoutMillis: 5000,
-});
+import oracledb from 'oracledb';
 
 export default async function handler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -21,15 +16,20 @@ export default async function handler(req, res) {
   // GET /api/notes
   if (p === '/api/notes') {
     res.setHeader('Access-Control-Allow-Origin', '*');
+    let connection;
     try {
-      const client = await pool.connect();
+      connection = await oracledb.getConnection({
+        connectString: process.env.DATABASE_URL,
+      });
       try {
-        const { rows } = await client.query('SELECT registration_number, body FROM notes');
+        const result = await connection.execute(
+          'SELECT registration_number, body FROM notes'
+        );
         const notes = {};
-        for (const r of rows) notes[r.registration_number] = r.body;
+        for (const r of result.rows) notes[r.registration_number] = r.body;
         return res.status(200).json({ notes });
       } finally {
-        client.release();
+        if (connection) { try { await connection.close(); } catch (e) {} }
       }
     } catch (err) {
       console.error('[api/notes] error:', err);
@@ -44,16 +44,19 @@ export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
 
     if (req.method === 'GET') {
+      let connection;
       try {
-        const client = await pool.connect();
+        connection = await oracledb.getConnection({
+          connectString: process.env.DATABASE_URL,
+        });
         try {
-          const row = await client.query(
+          const result = await connection.execute(
             'SELECT body FROM notes WHERE registration_number = ?',
             [reg]
           );
-          return res.status(200).json({ notes: row.rows.length > 0 ? row.rows[0].body : '' });
+          return res.status(200).json({ notes: result.rows.length > 0 ? result.rows[0].body : '' });
         } finally {
-          client.release();
+          if (connection) { try { await connection.close(); } catch (e) {} }
         }
       } catch (err) {
         console.error('[api/notes/get] error:', err);
@@ -78,30 +81,40 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'Invalid JSON' });
       }
 
-      const client = await pool.connect();
+      let connection;
       try {
-        const exists = await client.query(
-          'SELECT 1 FROM patients WHERE id = ?',
-          [reg]
-        );
-        if (exists.rows.length === 0) {
-          client.release();
-          return res.status(404).json({ error: 'Unknown patient' });
+        connection = await oracledb.getConnection({
+          connectString: process.env.DATABASE_URL,
+        });
+        try {
+          // Check patient exists
+          const existsResult = await connection.execute(
+            'SELECT 1 FROM patients WHERE id = ?',
+            [reg]
+          );
+          if (existsResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Unknown patient' });
+          }
+
+          const value = String(body.notes || '').slice(0, 20000);
+          await connection.execute(
+            `INSERT INTO notes (registration_number, body, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)` +
+            ` ON CONFLICT (registration_number) DO UPDATE SET body = excluded.body, updated_at = CURRENT_TIMESTAMP`,
+            [reg, value]
+          );
+
+          return res.status(200).json({ ok: true });
+        } catch (err) {
+          console.error('[api/notes/put] error:', err);
+          return res.status(500).json({ error: 'Database error' });
+        } finally {
+          if (connection) { try { await connection.close(); } catch (e) {} }
         }
-
-        const value = String(body.notes || '').slice(0, 20000);
-        await client.query(
-          `INSERT INTO notes (registration_number, body, updated_at) VALUES (?, ?, datetime('now'))
-           ON CONFLICT (registration_number) DO UPDATE SET body = excluded.body, updated_at = datetime('now')`,
-          [reg, value]
-        );
-
-        return res.status(200).json({ ok: true });
       } catch (err) {
-        console.error('[api/notes/put] error:', err);
-        return res.status(500).json({ error: 'Database error' });
+        console.error('[api/notes/put] connection error:', err);
+        return res.status(500).json({ error: 'Database connection error' });
       } finally {
-        client.release();
+        if (connection) { try { await connection.close(); } catch (e) {} }
       }
     }
 

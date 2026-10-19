@@ -1,9 +1,4 @@
-import { Pool } from 'pg';
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  idleTimeoutMillis: 5000,
-});
+import oracledb from 'oracledb';
 
 export default async function handler(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -36,13 +31,22 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       res.setHeader('Access-Control-Allow-Origin', '*');
+      let connection;
       try {
-        const client = await pool.connect();
+        connection = await oracledb.getConnection({
+          connectString: process.env.DATABASE_URL,
+          // For Oracle Free Tier TCPS, you may need wallet settings
+          // walletLocation: process.env.ORACLE_WALLET_PATH,
+          // sqlnetTimeout: 60
+        });
         try {
-          const { rows } = await client.query('SELECT id, name, phone, age, gender, city, first_visit FROM patients ORDER BY id');
+          const result = await connection.execute(
+            'SELECT id, name, phone, age, gender, city, first_visit FROM patients ORDER BY id'
+          );
+          const rows = result.rows;
           return res.status(200).json({ patients: rows });
         } finally {
-          client.release();
+          if (connection) { try { await connection.close(); } catch (e) {} }
         }
       } catch (err) {
         console.error('[api/patients] query error:', err);
@@ -55,7 +59,6 @@ export default async function handler(req, res) {
       res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, OPTIONS');
       res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-vitalis-client');
 
-      // Validate x-vitalis-client header
       if (req.headers['x-vitalis-client'] !== 'app') {
         return res.status(403).json({ error: 'Forbidden' });
       }
@@ -81,40 +84,47 @@ export default async function handler(req, res) {
       const year = new Date().getFullYear();
       const prefix = `HM-${year}-`;
 
-      const client = await pool.connect();
+      let connection;
       try {
-        const last = await client.query(
-          "SELECT id FROM patients WHERE id LIKE ? ORDER BY id DESC LIMIT 1",
-          [prefix + '%']
-        );
-        let seq = 1;
-        if (last.rows.length > 0) {
-          const n = parseInt(last.rows[0].id.slice(prefix.length), 10);
-          if (!isNaN(n)) seq = n + 1;
+        connection = await oracledb.getConnection({
+          connectString: process.env.DATABASE_URL,
+        });
+        try {
+          const lastResult = await connection.execute(
+            "SELECT id FROM patients WHERE id LIKE ? ORDER BY id DESC LIMIT 1",
+            [prefix + '%']
+          );
+          let seq = 1;
+          if (lastResult.rows.length > 0) {
+            const n = parseInt(lastResult.rows[0].id.slice(prefix.length), 10);
+            if (!isNaN(n)) seq = n + 1;
+          }
+          const reg = `${prefix}${String(seq).padStart(4, '0')}`;
+
+          await connection.execute(
+            'INSERT INTO patients (id, name, phone, age, gender, city, first_visit) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [reg, name, phone, body.age === undefined || body.age === null ? null : parseInt(body.age, 10),
+             String(body.gender || '').trim() || null,
+             String(body.city || '').trim() || null,
+             String(body.firstVisit || '').trim() || new Date().toISOString().slice(0, 10)]
+          );
+
+          // Insert empty notes entry
+          await connection.execute(
+            `INSERT INTO notes (registration_number, body, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP)`,
+            [reg, '']
+          );
+
+          return res.status(201).json({ ok: true, registrationNumber: reg });
+        } catch (err) {
+          console.error('[api/patients] insert error:', err);
+          return res.status(500).json({ error: 'Database error' });
+        } finally {
+          if (connection) { try { await connection.close(); } catch (e) {} }
         }
-        const reg = `${prefix}${String(seq).padStart(4, '0')}`;
-
-        const result = await client.query(
-          'INSERT INTO patients (id, name, phone, age, gender, city, first_visit) VALUES (?, ?, ?, ?, ?, ?, ?)',
-          [reg, name, phone, body.age === undefined || body.age === null ? null : parseInt(body.age, 10),
-           String(body.gender || '').trim() || null,
-           String(body.city || '').trim() || null,
-           String(body.firstVisit || '').trim() || new Date().toISOString().slice(0, 10)]
-        );
-
-        // Also insert empty notes entry
-        await client.query(
-          `INSERT INTO notes (registration_number, body, updated_at) VALUES (?, ?, datetime('now'))
-           ON CONFLICT (registration_number) DO UPDATE SET body = excluded.body, updated_at = datetime('now')`,
-          [reg, '']
-        );
-
-        return res.status(201).json({ ok: true, registrationNumber: reg });
       } catch (err) {
-        console.error('[api/patients] insert error:', err);
-        return res.status(500).json({ error: 'Database error' });
-      } finally {
-        client.release();
+        console.error('[api/patients] connection error:', err);
+        return res.status(500).json({ error: 'Database connection error' });
       }
     }
 
@@ -145,66 +155,71 @@ export default async function handler(req, res) {
     }
 
     const reg = decodeURIComponent(pm[1]);
-    const client = await pool.connect();
-    // Check patient exists
-    const exists = await client.query(
-      'SELECT 1 FROM patients WHERE id = ?',
-      [reg]
-    );
-    if (exists.rows.length === 0) {
-      client.release();
-      return res.status(404).json({ error: 'Unknown patient' });
-    }
-
-    const name = String(body.name || '').trim();
-    if (!name) {
-      client.release();
-      return res.status(400).json({ error: 'Name is required' });
-    }
-    if (name.length > 80) {
-      client.release();
-      return res.status(400).json({ error: 'Name too long' });
-    }
-
-    const phone = String(body.phone || '').replace(/[^\d+ ]/g, '').trim().slice(0, 20);
-    const gender = String(body.gender || '').trim().slice(0, 30) || null;
-    const city = String(body.city || '').trim().slice(0, 60) || null;
-    const visit = String(body.firstVisit || '').trim();
-    if (visit && !/^\d{4}-\d{2}-\d{2}$/.test(visit)) {
-      client.release();
-      return res.status(400).json({ error: 'First visit must be YYYY-MM-DD' });
-    }
-
-    let age = body.age === undefined || body.age === null || body.age === '' ? null : parseInt(body.age, 10);
-    if (age !== null && (isNaN(age) || age < 0 || age > 130)) {
-      client.release();
-      return res.status(400).json({ error: 'Age must be between 0 and 130' });
-    }
-
+    let connection;
     try {
-      await client.query(
-        'UPDATE patients SET name = ?, phone = ?, age = ?, gender = ?, city = ?, first_visit = ? WHERE id = ?',
-        [name, phone, age, gender, city, visit || null, reg]
-      );
-
-      const rowResult = await client.query('SELECT * FROM patients WHERE id = ?', [reg]);
-      return res.status(200).json({
-        ok: true,
-        patient: {
-          id: rowResult.rows[0].id,
-          name: rowResult.rows[0].name,
-          phone: rowResult.rows[0].phone,
-          age: rowResult.rows[0].age,
-          gender: rowResult.rows[0].gender,
-          city: rowResult.rows[0].city,
-          firstVisit: rowResult.rows[0].first_visit,
-        }
+      connection = await oracledb.getConnection({
+        connectString: process.env.DATABASE_URL,
       });
+      // Check patient exists
+      const existsResult = await connection.execute(
+        'SELECT 1 FROM patients WHERE id = ?',
+        [reg]
+      );
+      if (existsResult.rows.length === 0) {
+        return res.status(404).json({ error: 'Unknown patient' });
+      }
+
+      const name = String(body.name || '').trim();
+      if (!name) {
+        return res.status(400).json({ error: 'Name is required' });
+      }
+      if (name.length > 80) {
+        return res.status(400).json({ error: 'Name too long' });
+      }
+
+      const phone = String(body.phone || '').replace(/[^\d+ ]/g, '').trim().slice(0, 20);
+      const gender = String(body.gender || '').trim().slice(0, 30) || null;
+      const city = String(body.city || '').trim().slice(0, 60) || null;
+      const visit = String(body.firstVisit || '').trim();
+      if (visit && !/^\d{4}-\d{2}-\d{2}$/.test(visit)) {
+        return res.status(400).json({ error: 'First visit must be YYYY-MM-DD' });
+      }
+
+      let age = body.age === undefined || body.age === null || body.age === '' ? null : parseInt(body.age, 10);
+      if (age !== null && (isNaN(age) || age < 0 || age > 130)) {
+        return res.status(400).json({ error: 'Age must be between 0 and 130' });
+      }
+
+      try {
+        await connection.execute(
+          'UPDATE patients SET name = ?, phone = ?, age = ?, gender = ?, city = ?, first_visit = ? WHERE id = ?',
+          [name, phone, age, gender, city, visit || null, reg]
+        );
+
+        const rowResult = await connection.execute('SELECT * FROM patients WHERE id = ?', [reg]);
+        return res.status(200).json({
+          ok: true,
+          patient: {
+            id: rowResult.rows[0].id,
+            name: rowResult.rows[0].name,
+            phone: rowResult.rows[0].phone,
+            age: rowResult.rows[0].age,
+            gender: rowResult.rows[0].gender,
+            city: rowResult.rows[0].city,
+            firstVisit: rowResult.rows[0].first_visit,
+          }
+        });
+      } catch (err) {
+        console.error('[api/patients] update error:', err);
+        return res.status(500).json({ error: 'Database error' });
+      } finally {
+        if (connection) { try { await connection.close(); } catch (e) {} }
+      }
     } catch (err) {
-      console.error('[api/patients] update error:', err);
-      return res.status(500).json({ error: 'Database error' });
+      console.error('[api/patients] connection error:', err);
+      return res.status(500).json({ error: 'Database connection error' });
     } finally {
-      client.release();
+      if (connection) { try { await connection.close(); } catch (e) {} }
     }
   }
 
