@@ -6,5 +6,5 @@
  * it falls back to this central clinic server, which holds the SQLite
  * registry and notes. No change is needed when running on the VM itself.
  */
-/* Backend URL is optional - the app falls back to embedded patients.json when backend is unavailable */
-window.VITALIS_API_BASE = "";
+/* Backend URL pointing to Oracle Cloud VM */
+window.VITALIS_API_BASE = "https://patient.129.154.239.74.sslip.io";
