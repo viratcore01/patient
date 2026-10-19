@@ -395,11 +395,13 @@
     setEditView(false);
   });
 
-  deletePatientBtn.addEventListener("click", function () {
-    if (!selectedId) return;
-    if (!confirm("Are you sure you want to delete this patient? This will also delete all associated clinical notes.")) return;
-    deletePatient(selectedId);
-  });
+  if (deletePatientBtn) {
+    deletePatientBtn.addEventListener("click", function () {
+      if (!selectedId) return;
+      if (!confirm("Are you sure you want to delete this patient? This will also delete all associated clinical notes.")) return;
+      deletePatient(selectedId);
+    });
+  }
 
   function deletePatient(id) {
     fetch(api("/api/patients/") + encodeURIComponent(id), {
