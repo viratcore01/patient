@@ -728,8 +728,8 @@
     if (existing && !window.confirm("A patient with this name and phone may already exist. Register anyway?")) {
       return;
     }
-    var regNum = document.getElementById("aRegNum").value.trim();
-    // If user provided a registration number, use it; otherwise server will auto-generate
+    // Use registration number from user profile if available, otherwise let user provide or auto-generate
+    var regNum = window.USER_REGISTRATION_PREFIX || document.getElementById("aRegNum").value.trim();
     var payload = {
       name: name,
       phone: document.getElementById("aPhone").value.trim(),
@@ -872,6 +872,16 @@ function boot() {
             if (data.user) {
               USER_CHIP.hidden = false;
               USER_CHIP.textContent = data.user.name || data.user.email || "Signed in";
+              // Set registration prefix from user profile if available
+              if (data.user.registrationPrefix) {
+                window.USER_REGISTRATION_PREFIX = data.user.registrationPrefix;
+              }
+              // Add click handler to open patient details
+              USER_CHIP.onclick = function () {
+                if (patients.length > 0) {
+                  openDrawer(patients[0].id);
+                }
+              };
             } else {
               USER_CHIP.hidden = true;
             }
