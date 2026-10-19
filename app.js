@@ -839,9 +839,11 @@
       });
 }
 
+
 function boot() {
     // 1. ALWAYS load embedded patients.json first - this ensures search works
     //    on Vercel and any static deployment without a backend running.
+    // 2. Skip API sync entirely - use embedded data only to avoid FUNCTION_INVOCATION_FAILED
     loadEmbeddedPatients().then(function (embedded) {
       patients = embedded.patients;
       doctorNotes = embedded.notes;
@@ -861,7 +863,7 @@ function boot() {
       mini.addAll([]);
       DB_STATUS.textContent = "0 patient records";
       HELPER.textContent = "Starting search - no patient data available";
-    });
+
 
     // 2. Attempt API sync in background - update data if backend becomes available
     API_BASE_READY
