@@ -911,6 +911,7 @@ function boot() {
         // API sync failed silently - embedded data already loaded
         console.log("API sync failed, using embedded data:", err.message);
       });
+    });
   }
 
   boot();
