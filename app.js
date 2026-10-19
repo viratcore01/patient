@@ -29,6 +29,7 @@
   var saveStateEl = document.getElementById("saveState");
 
   var editPatientBtn = document.getElementById("editPatient");
+  var deletePatientBtn = document.getElementById("deletePatient");
   var notesBlock = document.getElementById("notesBlock");
   var dGrid = document.getElementById("dGrid");
   var editForm = document.getElementById("editForm");
@@ -356,6 +357,7 @@
     selectedId = p.id;
     setEditView(false);
     editPatientBtn.hidden = false;
+    deletePatientBtn.hidden = false;
     var notes = doctorNoteFor(p.id) || p.notes || "";
 
     renderPatientFields(p);
@@ -392,6 +394,47 @@
   cancelEditBtn.addEventListener("click", function () {
     setEditView(false);
   });
+
+  deletePatientBtn.addEventListener("click", function () {
+    if (!selectedId) return;
+    if (!confirm("Are you sure you want to delete this patient? This will also delete all associated clinical notes.")) return;
+    deletePatient(selectedId);
+  });
+
+  function deletePatient(id) {
+    fetch(api("/api/patients/") + encodeURIComponent(id), {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", "x-vitalis-client": "app" }
+    })
+    .then(function (r) {
+      return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+    })
+    .then(function (out) {
+      if (!out.ok) {
+        editError.hidden = false;
+        editError.textContent = (out.body && out.body.error) || "Could not delete patient.";
+        return;
+      }
+      // Remove from local patients array and rebuild index
+      var p = findPatient(id);
+      if (p) {
+        patients.splice(patients.indexOf(p), 1);
+        delete patientById[id];
+        buildIndex(patients);
+        runSearch(SEARCH_INPUT.value);
+        persistCache();
+      }
+      // Hide drawer
+      closeDrawer();
+      editError.hidden = false;
+      editError.textContent = "Patient deleted successfully.";
+      setTimeout(hideSaveState, 2400);
+    })
+    .catch(function () {
+      editError.hidden = false;
+      editError.textContent = "Network error — check your connection and try again.";
+    });
+  }
 
   editForm.addEventListener("submit", function (e) {
     e.preventDefault();
@@ -682,6 +725,8 @@
     if (existing && !window.confirm("A patient with this name and phone may already exist. Register anyway?")) {
       return;
     }
+    var regNum = document.getElementById("aRegNum").value.trim();
+    // If user provided a registration number, use it; otherwise server will auto-generate
     var payload = {
       name: name,
       phone: document.getElementById("aPhone").value.trim(),
@@ -690,6 +735,9 @@
       city: document.getElementById("aCity").value.trim(),
       notes: document.getElementById("aNotes").value.trim()
     };
+    if (regNum) {
+      payload.registrationNumber = regNum;
+    }
     submitPatientBtn.disabled = true;
     submitPatientBtn.textContent = "Registering…";
     fetch(api("/api/patients"), {
@@ -770,7 +818,25 @@
     return patientById[id] || null;
   }
 
-  function boot() {
+  function loadEmbeddedPatients() {
+    return fetch("/data/patients.json", { cache: "no-store" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("HTTP " + r.status);
+        return r.json();
+      })
+      .then(function (list) {
+        var patients = (list || []).map(function (p) {
+          return {
+            id: p.id, name: p.name, phone: p.phone, age: p.age,
+            gender: p.gender, city: p.city, firstVisit: p.firstVisit,
+            notes: p.notes || ""
+          };
+        });
+        return { patients: patients, notes: {} };
+      });
+}
+
+function boot() {
     // 1. Paint instantly from the cache mirror if present.
     var cached = loadCache();
     if (cached && cached.patients.length) {
@@ -814,10 +880,13 @@
       })
       .catch(function (err) {
         if (!cached) {
-          DB_STATUS.textContent = "Could not load records";
-          HELPER.textContent = "Error loading patient data: " + (err && err.message === "no-backend"
-            ? "no backend available"
-            : (err && err.message) || "network error");
+          // Fallback: try loading embedded patients.json from the same origin
+          loadEmbeddedPatients().then(function (embedded) {
+            applyData(embedded.patients, embedded.notes);
+          }).catch(function () {
+            DB_STATUS.textContent = "Could not load records";
+            HELPER.textContent = "Error loading patient data: no backend available";
+          });
         }
       });
   }
