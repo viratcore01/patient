@@ -839,29 +839,30 @@
 }
 
 function boot() {
-    // 1. Paint instantly from the cache mirror if present.
-    var cached = loadCache();
-    if (cached && cached.patients.length) {
-      patients = cached.patients;
-      doctorNotes = cached.notes || {};
+    // 1. ALWAYS load embedded patients.json first - this ensures search works
+    //    on Vercel and any static deployment without a backend running.
+    loadEmbeddedPatients().then(function (embedded) {
+      patients = embedded.patients;
+      doctorNotes = embedded.notes;
       patientById = {};
       patients.forEach(function (p) { patientById[p.id] = p; });
       buildIndex(patients);
       DB_STATUS.textContent = patients.length + " patient records";
       runSearch(SEARCH_INPUT.value);
-    }
-
-    // 2. Try to load from embedded patients.json as fallback first,
-    //    then attempt API sync if desired.
-    loadEmbeddedPatients().then(function (embedded) {
-      applyData(embedded.patients, embedded.notes);
     }).catch(function () {
-      // If embedded data also fails, show error message
-      DB_STATUS.textContent = "Could not load records";
-      HELPER.textContent = "Error loading patient data: no backend available";
+      // Even embedded data failed - initialize with empty index so UI doesn't break
+      mini = new MiniSearch({
+        fields: ["name", "phone", "registrationNumber"],
+        storeFields: ["id"],
+        processTerm: processTerm,
+        extractField: extractField
+      });
+      mini.addAll([]);
+      DB_STATUS.textContent = "0 patient records";
+      HELPER.textContent = "Starting search - no patient data available";
     });
 
-    // 3. Attempt API sync in background (non-blocking)
+    // 2. Attempt API sync in background - update data if backend becomes available
     API_BASE_READY
       .then(function () {
         fetch(api("/api/me"), { cache: "no-store" })
@@ -888,8 +889,8 @@ function boot() {
         ]);
       })
       .then(function (outs) {
-        // API sync succeeded - update data if different from embedded
-        if (outs[0].patients && outs[0].patients.length > 0) {
+        // If API returned patients and we have fewer, update from API
+        if (outs[0].patients && outs[0].patients.length > patients.length) {
           applyData(outs[0].patients, outs[1].notes || {});
         }
       })
