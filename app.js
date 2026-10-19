@@ -355,7 +355,7 @@
     showSaveState("saving", "Saving…");
     fetch("/api/notes/" + encodeURIComponent(reg), {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-vitalis-client": "app" },
       body: JSON.stringify({ notes: value })
     })
       .then(function (res) {
@@ -528,7 +528,7 @@
     submitPatientBtn.textContent = "Registering…";
     fetch("/api/patients", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-vitalis-client": "app" },
       body: JSON.stringify(payload)
     })
       .then(function (r) {

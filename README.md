@@ -37,6 +37,22 @@ The app is also a full-stack Cloudflare Workers + D1 deployment with Sign in wit
 
 The fully static version (no backend) still works on its own: `app.js` falls back to the bundled `data/patients.json` and localStorage when the API is not present.
 
+## Self-hosted Oracle VM backend (current production)
+
+The app in daily use runs on an Oracle Cloud free-tier VM as a plain Node.js server with built-in SQLite (no dependencies):
+
+- **URL:** https://patient.129.154.239.74.sslip.io (HTTPS via Caddy + sslip.io wildcard DNS)
+- **`server.js`** — same API shape as the Worker: `/api/health`, `/api/patients` (GET/POST), `/api/notes` (GET), `/api/notes/:reg` (GET/PUT). Serves `public/` statically; database in SQLite at `data/patients.db`; writes require the `x-vitalis-client: app` header (a light CSRF gate for the single-user, no-login setup). Seeds the 30 starter records automatically on first run.
+- Runs as the `vitalis.service` systemd unit on port 3005 (auto-starts on boot); Caddy reverse-proxies the HTTPS subdomain to it. The clinic's other site on the same VM is untouched.
+
+Redeploy updates:
+
+```bash
+./build.sh
+scp -i <key> public/app.js ubuntu@129.154.239.74:apps/vitalis/public/app.js   # static files are read per request — no restart needed
+# for server.js changes: scp + `sudo systemctl restart vitalis`
+```
+
 ## Deploy
 
 The site is deployed on Freebuff Sites (Cloudflare Workers + D1 + Sign in with Freebuff). To run locally:
