@@ -216,6 +216,52 @@ const server = http.createServer(async (req, res) => {
       return httpError(res, 405, 'Method not allowed');
     }
 
+    const pm = p.match(/^\/api\/patients\/(.+)$/);
+    if (pm && req.method === 'PUT') {
+      corsFor(req, res);
+      if (req.headers['x-vitalis-client'] !== 'app') return httpError(res, 403, 'Forbidden');
+      const reg = decodeURIComponent(pm[1]);
+      if (!db.prepare('SELECT 1 AS x FROM patients WHERE id = ?').get(reg)) {
+        return httpError(res, 404, 'Unknown patient');
+      }
+      let body;
+      try { body = JSON.parse(await readBody(req, 20000)); } catch { return httpError(res, 400, 'Invalid JSON'); }
+
+      const name = String(body.name || '').trim();
+      if (!name) return httpError(res, 400, 'Name is required');
+      if (name.length > 80) return httpError(res, 400, 'Name is too long');
+      const phone = String(body.phone || '').replace(/[^\d+ ]/g, '').trim().slice(0, 20);
+      const gender = String(body.gender || '').trim().slice(0, 30) || null;
+      const city = String(body.city || '').trim().slice(0, 60) || null;
+      const visit = String(body.firstVisit || '').trim();
+      if (visit && !/^\d{4}-\d{2}-\d{2}$/.test(visit)) {
+        return httpError(res, 400, 'First visit must be a YYYY-MM-DD date');
+      }
+      let age = body.age === undefined || body.age === null || body.age === '' ? null : parseInt(body.age, 10);
+      if (age !== null && (Number.isNaN(age) || age < 0 || age > 130)) {
+        return httpError(res, 400, 'Age must be between 0 and 130');
+      }
+
+      const info = db
+        .prepare('UPDATE patients SET name = ?, phone = ?, age = ?, gender = ?, city = ?, first_visit = ? WHERE id = ?')
+        .run(name, phone, age, gender, city, visit || null, reg);
+      if (!info.changes) return httpError(res, 404, 'Unknown patient');
+
+      const row = db.prepare('SELECT * FROM patients WHERE id = ?').get(reg);
+      return sendJSON(res, 200, {
+        ok: true,
+        patient: {
+          id: row.id,
+          name: row.name,
+          phone: row.phone,
+          age: row.age,
+          gender: row.gender,
+          city: row.city,
+          firstVisit: row.first_visit,
+        },
+      });
+    }
+
     let m;
     if ((m = p.match(/^\/api\/notes$/)) && req.method === 'GET') {
       corsFor(req, res);

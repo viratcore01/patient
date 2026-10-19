@@ -28,6 +28,13 @@
   var notesEl = document.getElementById("dNotes");
   var saveStateEl = document.getElementById("saveState");
 
+  var editPatientBtn = document.getElementById("editPatient");
+  var dGrid = document.getElementById("dGrid");
+  var editForm = document.getElementById("editForm");
+  var editError = document.getElementById("editError");
+  var saveEditBtn = document.getElementById("saveEdit");
+  var cancelEditBtn = document.getElementById("cancelEdit");
+
   var addModal = document.getElementById("addModal");
   var addBackdrop = document.getElementById("addBackdrop");
   var closeAddBtn = document.getElementById("closeAdd");
@@ -320,22 +327,35 @@
   /* Detail drawer                                                       */
   /* ------------------------------------------------------------------ */
 
-  function openDrawer(id) {
-    var p = findPatient(id);
-    if (!p) return;
-    selectedId = p.id;
-    var notes = doctorNoteFor(p.id) || p.notes || "";
-
+  function renderPatientFields(p) {
     document.getElementById("dReg").textContent = p.id;
     document.getElementById("dName").textContent = p.name;
     var phoneLink = document.getElementById("dPhone");
     var pd = digitsOnly(p.phone);
-    phoneLink.textContent = p.phone;
-    phoneLink.href = "tel:+91" + pd;
+    phoneLink.textContent = p.phone ? p.phone : "—";
+    phoneLink.href = p.phone ? "tel:+91" + pd : "#";
     document.getElementById("dAge").textContent = p.age ? p.age + " yrs" : "—";
     document.getElementById("dGender").textContent = p.gender || "—";
     document.getElementById("dCity").textContent = p.city || "—";
     document.getElementById("dVisit").textContent = p.firstVisit || "—";
+  }
+
+  function setEditView(editing) {
+    dGrid.hidden = editing;
+    editForm.hidden = !editing;
+    editPatientBtn.hidden = editing;
+    if (!editing) editError.hidden = true;
+  }
+
+  function openDrawer(id) {
+    var p = findPatient(id);
+    if (!p) return;
+    selectedId = p.id;
+    setEditView(false);
+    editPatientBtn.hidden = false;
+    var notes = doctorNoteFor(p.id) || p.notes || "";
+
+    renderPatientFields(p);
     notesEl.value = notes;
     hideSaveState();
 
@@ -348,6 +368,97 @@
     document.body.classList.add("no-scroll");
     saveNotesBtn.disabled = false;
   }
+
+  /* Edit patient details -------------------------------------------- */
+
+  editPatientBtn.addEventListener("click", function () {
+    var p = findPatient(selectedId);
+    if (!p) return;
+    document.getElementById("eName").value = p.name || "";
+    document.getElementById("ePhone").value = p.phone || "";
+    document.getElementById("eAge").value = p.age === null || p.age === undefined ? "" : String(p.age);
+    document.getElementById("eGender").value = p.gender || "";
+    document.getElementById("eCity").value = p.city || "";
+    document.getElementById("eVisit").value = p.firstVisit || "";
+    editError.hidden = true;
+    setEditView(true);
+    setTimeout(function () { document.getElementById("eName").focus(); }, 200);
+  });
+
+  cancelEditBtn.addEventListener("click", function () {
+    setEditView(false);
+  });
+
+  editForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (!selectedId) return;
+    editError.hidden = true;
+    var name = document.getElementById("eName").value.trim();
+    if (!name) {
+      editError.hidden = false;
+      editError.textContent = "Please enter the patient's name.";
+      return;
+    }
+    var ageRaw = document.getElementById("eAge").value.trim();
+    if (ageRaw) {
+      var ageNum = parseInt(ageRaw, 10);
+      if (String(ageNum) !== ageRaw || ageNum < 0 || ageNum > 130) {
+        editError.hidden = false;
+        editError.textContent = "Age must be a number between 0 and 130.";
+        return;
+      }
+    }
+    var payload = {
+      name: name,
+      phone: document.getElementById("ePhone").value.trim(),
+      age: ageRaw || null,
+      gender: document.getElementById("eGender").value,
+      city: document.getElementById("eCity").value.trim(),
+      firstVisit: document.getElementById("eVisit").value
+    };
+    saveEditBtn.disabled = true;
+    saveEditBtn.textContent = "Saving…";
+    fetch(api("/api/patients/") + encodeURIComponent(selectedId), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-vitalis-client": "app" },
+      body: JSON.stringify(payload)
+    })
+      .then(function (r) {
+        return r.json().then(function (j) { return { ok: r.ok, body: j }; });
+      })
+      .then(function (out) {
+        saveEditBtn.disabled = false;
+        saveEditBtn.textContent = "Save changes";
+        if (!out.ok) {
+          editError.hidden = false;
+          editError.textContent = (out.body && out.body.error) || "Could not save changes.";
+          return;
+        }
+        var updated = out.body.patient || {};
+        var p = findPatient(selectedId);
+        if (p) {
+          p.name = updated.name !== undefined ? updated.name : p.name;
+          p.phone = updated.phone !== undefined ? updated.phone : p.phone;
+          p.age = updated.age !== undefined ? updated.age : p.age;
+          p.gender = updated.gender !== undefined ? updated.gender : p.gender;
+          p.city = updated.city !== undefined ? updated.city : p.city;
+          p.firstVisit = updated.firstVisit !== undefined ? updated.firstVisit : p.firstVisit;
+          buildIndex(patients);
+          runSearch(SEARCH_INPUT.value);
+          persistCache();
+        }
+        setEditView(false);
+        if (p) renderPatientFields(p);
+        showSaveState("ok", "Details updated — synced to all devices");
+        setTimeout(hideSaveState, 2400);
+      })
+      .catch(function () {
+        saveEditBtn.disabled = false;
+        saveEditBtn.textContent = "Save changes";
+        editError.hidden = false;
+        editError.textContent = "Network error — check your connection and try again.";
+      });
+  });
 
   function closeDrawer() {
     drawer.classList.remove("open");
@@ -478,7 +589,10 @@
   });
 
   document.addEventListener("keydown", function (e) {
-    if (e.key === "Escape" && !drawer.hidden) closeDrawer();
+    if (e.key === "Escape" && !drawer.hidden) {
+      if (!editForm.hidden) { setEditView(false); return; }
+      closeDrawer();
+    }
     if (e.key === "Escape" && !addModal.hidden) closeAddModal();
   });
 

@@ -556,3 +556,24 @@ mark {
   text-align: center;
 }
 .add-success .reg-big { display: block; font-size: 1.2rem; letter-spacing: 1px; margin-top: 2px; }
+
+/* Edit patient form (inside patient drawer) */
+.edit-form { padding: 0 0 4px 0; }
+.edit-form .f-field input[type="date"] {
+  font-variant-numeric: tabular-nums;
+}
+.edit-actions { display: flex; gap: 10px; align-items: center; }
+.edit-actions .save-btn { margin-top: 0; }
+.cancel-btn {
+  padding: 11px 18px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--white);
+  color: var(--ink-soft);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.cancel-btn:hover { background: var(--green-50); color: var(--green-800); }

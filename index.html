@@ -63,6 +63,9 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
       <h2>Patient file</h2>
+      <button class="icon-btn" id="editPatient" type="button" aria-label="Edit patient details" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16v4zM13.5 6.5l4 4"/></svg>
+      </button>
       <button class="icon-btn" id="shareDrawer" type="button" aria-label="Share patient file">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="18" cy="5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="19" r="2.5"/><path d="M8.2 10.9l7.6-4.3M8.2 13.1l7.6 4.3"/></svg>
       </button>
@@ -74,7 +77,7 @@
         <span class="reg-value" id="dReg">—</span>
       </div>
 
-      <div class="grid">
+      <div class="grid" id="dGrid">
         <div class="field"><span class="f-label">Name</span><span class="f-value" id="dName">—</span></div>
         <div class="field"><a class="f-value tel" id="dPhone" href="#">—</a></div>
         <div class="field"><span class="f-label">Age</span><span class="f-value" id="dAge">—</span></div>
@@ -82,6 +85,28 @@
         <div class="field"><span class="f-label">City</span><span class="f-value" id="dCity">—</span></div>
         <div class="field"><span class="f-label">First visit</span><span class="f-value" id="dVisit">—</span></div>
       </div>
+
+      <form id="editForm" class="add-body edit-form" hidden novalidate>
+        <div class="grid add-grid">
+          <div class="f-field"><label class="f-label" for="eName">Full name *</label>
+            <input id="eName" required autocomplete="off" maxlength="80" /></div>
+          <div class="f-field"><label class="f-label" for="ePhone">Phone number</label>
+            <input id="ePhone" inputmode="tel" autocomplete="off" maxlength="15" placeholder="10-digit mobile" /></div>
+          <div class="f-field"><label class="f-label" for="eAge">Age</label>
+            <input id="eAge" inputmode="numeric" autocomplete="off" maxlength="3" placeholder="e.g. 34" /></div>
+          <div class="f-field"><label class="f-label" for="eGender">Gender</label>
+            <select id="eGender"><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></select></div>
+          <div class="f-field"><label class="f-label" for="eCity">City</label>
+            <input id="eCity" autocomplete="off" maxlength="60" /></div>
+          <div class="f-field"><label class="f-label" for="eVisit">First visit</label>
+            <input id="eVisit" type="date" autocomplete="off" /></div>
+        </div>
+        <div class="add-error" id="editError" hidden></div>
+        <div class="edit-actions">
+          <button class="save-btn" id="saveEdit" type="submit">Save changes</button>
+          <button class="cancel-btn" id="cancelEdit" type="button">Cancel</button>
+        </div>
+      </form>
 
       <div class="notes-block">
         <div class="notes-head">
